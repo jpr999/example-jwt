@@ -10,62 +10,59 @@
 /**
  * StoryDb client definitions.
  */
-class StoryDb : public oatpp::orm::DbClient {
+class StoryDb : public oatpp::orm::DbClient
+{
 public:
+    StoryDb(const std::shared_ptr<oatpp::orm::Executor>& executor)
+        : oatpp::orm::DbClient(executor)
+    {
+        oatpp::orm::SchemaMigration migration(executor, "story_service");
+        migration.addFile(1 /* start from version 1 */, DATABASE_MIGRATIONS "/StoryService/001_init.sql");
+        // TODO - Add more migrations here.
+        migration.migrate(); // <-- run migrations. This guy will throw on error.
 
-  StoryDb(const std::shared_ptr<oatpp::orm::Executor>& executor)
-    : oatpp::orm::DbClient(executor)
-  {
-    oatpp::orm::SchemaMigration migration(executor, "story_service");
-    migration.addFile(1 /* start from version 1 */, DATABASE_MIGRATIONS "/StoryService/001_init.sql");
-    // TODO - Add more migrations here.
-    migration.migrate(); // <-- run migrations. This guy will throw on error.
+        auto version = migration.getSchemaVersion();
+        OATPP_LOGD("StoryDb", "Migration - OK. Version=%d.", version);
+    }
 
-    auto version = migration.getSchemaVersion();
-    OATPP_LOGD("StoryDb", "Migration - OK. Version=%d.", version);
+    QUERY(createStory,
+          "INSERT INTO Stories"
+          "(id, userid, content) VALUES "
+          "(uuid_generate_v4(), :story.userid, :story.content) "
+          "RETURNING *;",
+          PREPARE(true), // prepared statement!
+          PARAM(oatpp::Object<StoryModel>, story))
 
-  }
+    QUERY(updateStory,
+          "UPDATE Stories "
+          "SET "
+          " content=:story.content, "
+          "WHERE "
+          " id=:story.id AND userid=:story.userid "
+          "RETURNING *;",
+          PREPARE(true), // prepared statement!
+          PARAM(oatpp::Object<StoryModel>, story))
 
-  QUERY(createStory,
-        "INSERT INTO Stories"
-        "(id, userid, content) VALUES "
-        "(uuid_generate_v4(), :story.userid, :story.content) "
-        "RETURNING *;",
-        PREPARE(true), // prepared statement!
-        PARAM(oatpp::Object<StoryModel>, story))
+    QUERY(getStoryByUserIdAndId,
+          "SELECT * FROM Stories WHERE id=:id AND userid=:userId;",
+          PREPARE(true), // prepared statement!
+          PARAM(oatpp::String, userId),
+          PARAM(oatpp::String, id))
 
-  QUERY(updateStory,
-        "UPDATE Stories "
-        "SET "
-        " content=:story.content, "
-        "WHERE "
-        " id=:story.id AND userid=:story.userid "
-        "RETURNING *;",
-        PREPARE(true), // prepared statement!
-        PARAM(oatpp::Object<StoryModel>, story))
+    QUERY(getAllUserStories,
+          "SELECT * FROM Stories WHERE userid=:userId LIMIT :limit OFFSET :offset;",
+          PREPARE(true), // prepared statement!
+          PARAM(oatpp::String, userId),
+          PARAM(oatpp::UInt32, offset),
+          PARAM(oatpp::UInt32, limit))
 
-  QUERY(getStoryByUserIdAndId,
-        "SELECT * FROM Stories WHERE id=:id AND userid=:userId;",
-        PREPARE(true), // prepared statement!
-        PARAM(oatpp::String, userId),
-        PARAM(oatpp::String, id))
-
-  QUERY(getAllUserStories,
-        "SELECT * FROM Stories WHERE userid=:userId LIMIT :limit OFFSET :offset;",
-        PREPARE(true), // prepared statement!
-        PARAM(oatpp::String, userId),
-        PARAM(oatpp::UInt32, offset),
-        PARAM(oatpp::UInt32, limit))
-
-  QUERY(deleteStoryByUserIdAndId,
-        "DELETE FROM Stories WHERE id=:id AND userid=:userId;",
-        PREPARE(true), // prepared statement!
-        PARAM(oatpp::String, userId),
-        PARAM(oatpp::String, id))
-
+    QUERY(deleteStoryByUserIdAndId,
+          "DELETE FROM Stories WHERE id=:id AND userid=:userId;",
+          PREPARE(true), // prepared statement!
+          PARAM(oatpp::String, userId),
+          PARAM(oatpp::String, id))
 };
 
 #include OATPP_CODEGEN_END(DbClient) //<- End Codegen
-
 
 #endif //EXAMPLE_JWT_STORYDB_HPP

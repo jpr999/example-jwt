@@ -2,17 +2,19 @@
 #ifndef AppComponent_hpp
 #define AppComponent_hpp
 
+// clang-format off
 #include "SwaggerComponent.hpp"
 #include "DatabaseComponent.hpp"
 
+// clang-format on
 #include "ErrorHandler.hpp"
 
-#include "oatpp/web/server/interceptor/AllowCorsGlobal.hpp"
 #include "interceptor/AuthInterceptor.hpp"
+#include "oatpp/web/server/interceptor/AllowCorsGlobal.hpp"
 
+#include "oatpp/network/tcp/server/ConnectionProvider.hpp"
 #include "oatpp/web/server/HttpConnectionHandler.hpp"
 #include "oatpp/web/server/HttpRouter.hpp"
-#include "oatpp/network/tcp/server/ConnectionProvider.hpp"
 
 #include "oatpp/parser/json/mapping/ObjectMapper.hpp"
 
@@ -22,68 +24,61 @@
  *  Class which creates and holds Application components and registers components in oatpp::base::Environment
  *  Order of components initialization is from top to bottom
  */
-class AppComponent {
+class AppComponent
+{
 public:
-  
-  /**
+    /**
    *  Swagger component
    */
-  SwaggerComponent swaggerComponent;
+    SwaggerComponent swaggerComponent;
 
-  /**
+    /**
    * Database component
    */
-  DatabaseComponent databaseComponent;
+    DatabaseComponent databaseComponent;
 
-  OATPP_CREATE_COMPONENT(std::shared_ptr<JWT>, jwt)([]{
-    return std::make_shared<JWT>("<my-secret>", "<my-issuer>");
-  }());
+    OATPP_CREATE_COMPONENT(std::shared_ptr<JWT>, jwt)([] { return std::make_shared<JWT>("<my-secret>", "<my-issuer>"); }());
 
-  /**
+    /**
    * Create ObjectMapper component to serialize/deserialize DTOs in Contoller's API
    */
-  OATPP_CREATE_COMPONENT(std::shared_ptr<oatpp::data::mapping::ObjectMapper>, apiObjectMapper)([] {
-    auto objectMapper = oatpp::parser::json::mapping::ObjectMapper::createShared();
-    objectMapper->getDeserializer()->getConfig()->allowUnknownFields = false;
-    return objectMapper;
-  }());
-  
-  /**
+    OATPP_CREATE_COMPONENT(std::shared_ptr<oatpp::data::mapping::ObjectMapper>, apiObjectMapper)
+    ([] {
+        auto objectMapper = oatpp::parser::json::mapping::ObjectMapper::createShared();
+        objectMapper->getDeserializer()->getConfig()->allowUnknownFields = false;
+        return objectMapper;
+    }());
+
+    /**
    *  Create ConnectionProvider component which listens on the port
    */
-  OATPP_CREATE_COMPONENT(std::shared_ptr<oatpp::network::ServerConnectionProvider>, serverConnectionProvider)([] {
-    return oatpp::network::tcp::server::ConnectionProvider::createShared({"0.0.0.0", 8000, oatpp::network::Address::IP_4});
-  }());
-  
-  /**
+    OATPP_CREATE_COMPONENT(std::shared_ptr<oatpp::network::ServerConnectionProvider>, serverConnectionProvider)([] { return oatpp::network::tcp::server::ConnectionProvider::createShared({"0.0.0.0", 8000, oatpp::network::Address::IP_4}); }());
+
+    /**
    *  Create Router component
    */
-  OATPP_CREATE_COMPONENT(std::shared_ptr<oatpp::web::server::HttpRouter>, httpRouter)([] {
-    return oatpp::web::server::HttpRouter::createShared();
-  }());
-  
-  /**
+    OATPP_CREATE_COMPONENT(std::shared_ptr<oatpp::web::server::HttpRouter>, httpRouter)([] { return oatpp::web::server::HttpRouter::createShared(); }());
+
+    /**
    *  Create ConnectionHandler component which uses Router component to route requests
    */
-  OATPP_CREATE_COMPONENT(std::shared_ptr<oatpp::network::ConnectionHandler>, serverConnectionHandler)([] {
+    OATPP_CREATE_COMPONENT(std::shared_ptr<oatpp::network::ConnectionHandler>, serverConnectionHandler)
+    ([] {
+        OATPP_COMPONENT(std::shared_ptr<JWT>, jwt); // get JWT component
+        OATPP_COMPONENT(std::shared_ptr<oatpp::web::server::HttpRouter>, router); // get Router component
+        OATPP_COMPONENT(std::shared_ptr<oatpp::data::mapping::ObjectMapper>, objectMapper); // get ObjectMapper component
 
-    OATPP_COMPONENT(std::shared_ptr<JWT>, jwt); // get JWT component
-    OATPP_COMPONENT(std::shared_ptr<oatpp::web::server::HttpRouter>, router); // get Router component
-    OATPP_COMPONENT(std::shared_ptr<oatpp::data::mapping::ObjectMapper>, objectMapper); // get ObjectMapper component
+        auto connectionHandler = oatpp::web::server::HttpConnectionHandler::createShared(router);
 
-    auto connectionHandler = oatpp::web::server::HttpConnectionHandler::createShared(router);
+        connectionHandler->setErrorHandler(std::make_shared<ErrorHandler>(objectMapper));
 
-    connectionHandler->setErrorHandler(std::make_shared<ErrorHandler>(objectMapper));
+        connectionHandler->addRequestInterceptor(std::make_shared<oatpp::web::server::interceptor::AllowOptionsGlobal>());
+        connectionHandler->addRequestInterceptor(std::make_shared<AuthInterceptor>(jwt));
 
-    connectionHandler->addRequestInterceptor(std::make_shared<oatpp::web::server::interceptor::AllowOptionsGlobal>());
-    connectionHandler->addRequestInterceptor(std::make_shared<AuthInterceptor>(jwt));
+        connectionHandler->addResponseInterceptor(std::make_shared<oatpp::web::server::interceptor::AllowCorsGlobal>());
 
-    connectionHandler->addResponseInterceptor(std::make_shared<oatpp::web::server::interceptor::AllowCorsGlobal>());
-
-    return connectionHandler;
-
-  }());
-
+        return connectionHandler;
+    }());
 };
 
 #endif /* AppComponent_hpp */

@@ -4,14 +4,14 @@
 
 #include "oatpp-test/UnitTest.hpp"
 
-class FullTest : public oatpp::test::UnitTest {
+class FullTest : public oatpp::test::UnitTest
+{
 public:
-  FullTest() : oatpp::test::UnitTest("[MyTest]")
-  {}
+    FullTest()
+        : oatpp::test::UnitTest("[MyTest]")
+    {}
 
-  void onRun() override;
-
+    void onRun() override;
 };
-
 
 #endif //EXAMPLE_JWT_FULLTEST_HPP
